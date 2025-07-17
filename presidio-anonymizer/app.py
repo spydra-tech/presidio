@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
 from presidio_anonymizer import AnonymizerEngine, DeanonymizeEngine
+from presidio_anonymizer.operators.custom_fpe_anonymizer import FPEAnonymizer
 from presidio_anonymizer.entities import InvalidParamError
 from presidio_anonymizer.services.app_entities_convertor import AppEntitiesConvertor
 from werkzeug.exceptions import BadRequest, HTTPException
@@ -37,6 +38,7 @@ class Server:
         self.app = Flask(__name__)
         self.logger.info("Starting anonymizer engine")
         self.anonymizer = AnonymizerEngine()
+        self.anonymizer.add_anonymizer(FPEAnonymizer)
         self.deanonymize = DeanonymizeEngine()
         self.logger.info(WELCOME_MESSAGE)
 
