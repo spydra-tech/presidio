@@ -4,7 +4,12 @@ import logging
 import os
 from logging.config import fileConfig
 from pathlib import Path
-
+logging.basicConfig(
+    filename="app.log",
+    level=logging.ERROR,
+    force=True,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 from flask import Flask, Response, jsonify, request
 from presidio_anonymizer import AnonymizerEngine, DeanonymizeEngine
 from presidio_anonymizer.operators.custom_fpe_anonymizer import FPEAnonymizer
@@ -12,7 +17,7 @@ from presidio_anonymizer.entities import InvalidParamError
 from presidio_anonymizer.services.app_entities_convertor import AppEntitiesConvertor
 from werkzeug.exceptions import BadRequest, HTTPException
 
-DEFAULT_PORT = "3000"
+DEFAULT_PORT = "5001"
 
 LOGGING_CONF_FILE = "logging.ini"
 
@@ -40,6 +45,7 @@ class Server:
         self.anonymizer = AnonymizerEngine()
         self.anonymizer.add_anonymizer(FPEAnonymizer)
         self.deanonymize = DeanonymizeEngine()
+        self.deanonymize.add_deanonymizer(FPEAnonymizer)
         self.logger.info(WELCOME_MESSAGE)
 
         @self.app.route("/health")
@@ -78,12 +84,15 @@ class Server:
             deanonymize_entities = AppEntitiesConvertor.deanonymize_entities_from_json(
                 content
             )
+            logging.info("code------")
             deanonymize_config = AppEntitiesConvertor.operators_config_from_json(
                 content.get("deanonymizers")
             )
+            logging.info("deanonymize_config---%s, ",deanonymize_entities)
             deanonymized_response = self.deanonymize.deanonymize(
                 text=text, entities=deanonymize_entities, operators=deanonymize_config
             )
+            logging.info("deanonymized_response---")
             return Response(
                 deanonymized_response.to_json(), mimetype="application/json"
             )
