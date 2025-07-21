@@ -9,7 +9,14 @@ from typing import Tuple
 
 from flask import Flask, Response, jsonify, request
 from presidio_analyzer import AnalyzerEngine, AnalyzerEngineProvider, AnalyzerRequest
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException,Unauthorized
+
+def require_api_key():
+    api_key_header = request.headers.get("x-api-key")
+    expected_key = os.environ.get("API_KEY")
+    if not api_key_header or api_key_header != expected_key:
+        raise Unauthorized("Invalid or missing API key.")
+
 
 DEFAULT_PORT = "3000"
 
@@ -53,8 +60,73 @@ class Server:
             """Return basic health probe result."""
             return "Presidio Analyzer service is up"
 
+
+        @self.app.route("/bulk_analyze", methods=["POST"])
+        def bulk_analyze() -> Tuple[str, int]:
+            require_api_key()
+            """
+            Analyze multiple texts in one request.
+            Request format:
+            {
+                "texts": [ "text1", "text2", ... ],
+                "language": "en",
+                "entities": ["PHONE_NUMBER", "EMAIL_ADDRESS"],
+                ...
+            }
+            """
+            try:
+                content = request.get_json()
+                texts = content.get("texts")
+                language = content.get("language")
+
+                if not texts or not isinstance(texts, list):
+                    raise Exception("Missing or invalid 'texts' array in request.")
+                if not language:
+                    raise Exception("Missing 'language' parameter in request.")
+
+                # Optional params with defaults
+                score_threshold = content.get("score_threshold", 0.5)
+                entities = content.get("entities")
+                return_decision_process = content.get("return_decision_process", False)
+                ad_hoc_recognizers = content.get("ad_hoc_recognizers")
+                context = content.get("context")
+                allow_list = content.get("allow_list")
+                allow_list_match = content.get("allow_list_match", "PARTIAL")
+                regex_flags = content.get("regex_flags")
+
+                results = []
+                for idx, text in enumerate(texts):
+                    recognizer_result_list = self.engine.analyze(
+                        text=text,
+                        language=language,
+                        score_threshold=score_threshold,
+                        entities=entities,
+                        return_decision_process=return_decision_process,
+                        ad_hoc_recognizers=ad_hoc_recognizers,
+                        context=context,
+                        allow_list=allow_list,
+                        allow_list_match=allow_list_match,
+                        regex_flags=regex_flags,
+                    )
+                    _exclude_attributes_from_dto(recognizer_result_list)
+                    results.append({
+                         "text": text,
+                         "analyzer_results": [r.to_dict() for r in recognizer_result_list]
+                    })
+
+                return jsonify(results), 200
+
+            except Exception as e:
+                self.logger.error(
+                    f"A fatal error occurred during execution of bulk_analyze. {e}"
+                )
+                return jsonify(error=str(e)), 500
+
+    
+
         @self.app.route("/analyze", methods=["POST"])
         def analyze() -> Tuple[str, int]:
+            require_api_key()
             """Execute the analyzer function."""
             # Parse the request params
             try:

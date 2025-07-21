@@ -15,8 +15,14 @@ from presidio_anonymizer import AnonymizerEngine, DeanonymizeEngine
 from presidio_anonymizer.operators.custom_fpe_anonymizer import FPEAnonymizer
 from presidio_anonymizer.entities import InvalidParamError
 from presidio_anonymizer.services.app_entities_convertor import AppEntitiesConvertor
-from werkzeug.exceptions import BadRequest, HTTPException
+from werkzeug.exceptions import BadRequest, HTTPException,Unauthorized
 
+
+def require_api_key():
+    api_key_header = request.headers.get("x-api-key")
+    expected_key = os.environ.get("API_KEY")
+    if not api_key_header or api_key_header != expected_key:
+        raise Unauthorized("Invalid or missing API key.")
 DEFAULT_PORT = "5001"
 
 LOGGING_CONF_FILE = "logging.ini"
@@ -53,8 +59,53 @@ class Server:
             """Return basic health probe result."""
             return "Presidio Anonymizer service is up"
 
+
+
+        @self.app.route("/bulk_anonymize", methods=["POST"])
+        def bulk_anonymize() -> Response:
+            require_api_key()
+            content = request.get_json()
+            if not content or not isinstance(content, list):
+                raise BadRequest("Invalid request. Expected a list of anonymization jobs.")
+
+            results = []
+
+            for item in content:
+                text = item.get("text", "")
+                analyzer_results = AppEntitiesConvertor.analyzer_results_from_json(
+                    item.get("analyzer_results", [])
+                )
+                anonymizers_config = AppEntitiesConvertor.operators_config_from_json(
+                    item.get("anonymizers", {})
+                )
+                if AppEntitiesConvertor.check_custom_operator(anonymizers_config):
+                    raise BadRequest("Custom type anonymizer is not supported")
+
+                try:
+                    anonymized_result = self.anonymizer.anonymize(
+                        text=text,
+                        analyzer_results=analyzer_results,
+                        operators=anonymizers_config,
+                    )
+                    results.append({
+                        "text": text,
+                        "anonymized_text": anonymized_result.text,
+                        "anonymizer_results": [
+                            result.to_dict() for result in anonymized_result.items
+                        ],
+                    })
+                except Exception as e:
+                    self.logger.error(f"Error anonymizing text: {e}")
+                    results.append({
+                        "text": text,
+                        "error": str(e)
+                    })
+
+            return jsonify(results)
+
         @self.app.route("/anonymize", methods=["POST"])
         def anonymize() -> Response:
+            require_api_key()
             content = request.get_json()
             if not content:
                 raise BadRequest("Invalid request json")
@@ -99,6 +150,7 @@ class Server:
 
         @self.app.route("/anonymizers", methods=["GET"])
         def anonymizers():
+            require_api_key()
             """Return a list of supported anonymizers."""
             return jsonify(self.anonymizer.get_anonymizers())
 
