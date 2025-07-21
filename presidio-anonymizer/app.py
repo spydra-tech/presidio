@@ -53,6 +53,49 @@ class Server:
             """Return basic health probe result."""
             return "Presidio Anonymizer service is up"
 
+
+
+        @self.app.route("/bulk_anonymize", methods=["POST"])
+        def bulk_anonymize() -> Response:
+            content = request.get_json()
+            if not content or not isinstance(content, list):
+                raise BadRequest("Invalid request. Expected a list of anonymization jobs.")
+
+            results = []
+
+            for item in content:
+                text = item.get("text", "")
+                analyzer_results = AppEntitiesConvertor.analyzer_results_from_json(
+                    item.get("analyzer_results", [])
+                )
+                anonymizers_config = AppEntitiesConvertor.operators_config_from_json(
+                    item.get("anonymizers", {})
+                )
+                if AppEntitiesConvertor.check_custom_operator(anonymizers_config):
+                    raise BadRequest("Custom type anonymizer is not supported")
+
+                try:
+                    anonymized_result = self.anonymizer.anonymize(
+                        text=text,
+                        analyzer_results=analyzer_results,
+                        operators=anonymizers_config,
+                    )
+                    results.append({
+                        "text": text,
+                        "anonymized_text": anonymized_result.text,
+                        "anonymizer_results": [
+                            result.to_dict() for result in anonymized_result.items
+                        ],
+                    })
+                except Exception as e:
+                    self.logger.error(f"Error anonymizing text: {e}")
+                    results.append({
+                        "text": text,
+                        "error": str(e)
+                    })
+
+            return jsonify(results)
+
         @self.app.route("/anonymize", methods=["POST"])
         def anonymize() -> Response:
             content = request.get_json()
