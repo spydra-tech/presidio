@@ -9,7 +9,14 @@ from typing import Tuple
 
 from flask import Flask, Response, jsonify, request
 from presidio_analyzer import AnalyzerEngine, AnalyzerEngineProvider, AnalyzerRequest
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException,Unauthorized
+
+def require_api_key():
+    api_key_header = request.headers.get("x-api-key")
+    expected_key = os.environ.get("API_KEY")
+    if not api_key_header or api_key_header != expected_key:
+        raise Unauthorized("Invalid or missing API key.")
+
 
 DEFAULT_PORT = "3000"
 
@@ -56,6 +63,7 @@ class Server:
 
         @self.app.route("/bulk_analyze", methods=["POST"])
         def bulk_analyze() -> Tuple[str, int]:
+            require_api_key()
             """
             Analyze multiple texts in one request.
             Request format:
@@ -118,6 +126,7 @@ class Server:
 
         @self.app.route("/analyze", methods=["POST"])
         def analyze() -> Tuple[str, int]:
+            require_api_key()
             """Execute the analyzer function."""
             # Parse the request params
             try:
