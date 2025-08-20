@@ -3,7 +3,7 @@ name: aws-presidio-anonymizer
 on:
   push:
     branches:
-      - fpe-anonymizer
+      - feature/fpe-anonymizer
   workflow_dispatch:
     inputs:
       environment:
