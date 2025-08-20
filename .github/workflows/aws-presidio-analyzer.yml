@@ -1,0 +1,84 @@
+name: aws-presidio-anonymizer
+
+on:
+  push:
+    branches:
+      - fpe-anonymizer
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+env:
+  AWS_REGION: us-west-2
+  ECS_CLUSTER: spydra-prod
+  ECR_REPOSITORY: presidio-analyzer
+  SERVICE_NAME: presidio-analyzer
+  TASK_DEFINITION: presidio-analyzer
+  FORCE_COLOR: 3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50  # Get commit history for AI summary
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID_PROD}}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+        run: |
+          docker build -f presidio-analyzer/Dockerfile \
+            -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }} .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }}
+
+      - name: Update ECS service
+        id: ecs-deploy
+        run: |
+          FULL_IMAGE="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }}"
+          
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${{ env.TASK_DEFINITION }}" --include TAGS)
+          
+          NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$FULL_IMAGE" \
+            '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
+            del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) |
+             del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          
+          NEW_TASK_INFO=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION")
+          NEW_REVISION=$(echo $NEW_TASK_INFO | jq '.taskDefinition.revision')
+          
+          echo "new_revision=$NEW_REVISION" >> $GITHUB_OUTPUT
+          echo "image_uri=$FULL_IMAGE" >> $GITHUB_OUTPUT
+          
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.SERVICE_NAME }} \
+            --task-definition ${{ env.TASK_DEFINITION }}:${NEW_REVISION} \
+            --force-new-deployment
+          
+          echo "Waiting for service deployment to complete..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.SERVICE_NAME }}
+          
+          echo "Service deployment completed successfully"
