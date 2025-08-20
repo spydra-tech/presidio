@@ -1,4 +1,4 @@
-name: aws-presidio-anonymizer
+name: aws-presidio-analyzer
 
 on:
   push:
@@ -48,13 +48,13 @@ jobs:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID_PROD}}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
         run: |
           docker build -f presidio-analyzer/Dockerfile \
-            -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }} .
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }}
+            -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }} presidio-analyzer/
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }}
 
       - name: Update ECS service
         id: ecs-deploy
         run: |
-          FULL_IMAGE="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:thena-platform-${{ github.sha }}"
+          FULL_IMAGE="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }}"
           
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${{ env.TASK_DEFINITION }}" --include TAGS)
           
