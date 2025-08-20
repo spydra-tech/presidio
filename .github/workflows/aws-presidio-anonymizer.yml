@@ -1,16 +1,17 @@
-name: aws-presidio-analyzer
+name: aws-presidio-anonymizer
 
 on:
   push:
     branches:
       - feature/fpe-anonymizer
 
+
 env:
   AWS_REGION: us-west-2
   ECS_CLUSTER: spydra-prod
-  ECR_REPOSITORY: presidio-analyzer
-  SERVICE_NAME: presidio-analyzer
-  TASK_DEFINITION: presidio-analyzer
+  ECR_REPOSITORY: presidio-anonymizer
+  SERVICE_NAME: presidio-anonymizer
+  TASK_DEFINITION: presidio-anonymizer
   FORCE_COLOR: 3
 
 jobs:
@@ -38,16 +39,17 @@ jobs:
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID_PROD}}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
         run: |
-          docker build -f presidio-analyzer/Dockerfile \
-            -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }} presidio-analyzer/
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }}
+          docker build -f presidio-anonymizer/Dockerfile \
+            -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-anonymizer-${{ github.sha }} presidio-anonymizer/
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:presidio-anonymizer-${{ github.sha }}
 
       - name: Update ECS service
         id: ecs-deploy
         run: |
-          FULL_IMAGE="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:presidio-analyzer-${{ github.sha }}"
+          FULL_IMAGE="${{ secrets.AWS_ACCOUNT_ID_PROD }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:presidio-anonymizer-${{ github.sha }}"
           
           TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition "${{ env.TASK_DEFINITION }}" --include TAGS)
+          
           
           NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "$FULL_IMAGE" \
             '.taskDefinition | .containerDefinitions[0].image = $IMAGE |
