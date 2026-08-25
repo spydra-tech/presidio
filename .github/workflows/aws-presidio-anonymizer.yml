@@ -3,7 +3,7 @@ name: aws-presidio-anonymizer
 on:
   push:
     branches:
-      - feature/fpe-anonymizer
+      - feature/fpe--aws
 
 
 env:

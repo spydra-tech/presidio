@@ -3,7 +3,7 @@ name: aws-presidio-analyzer
 on:
   push:
     branches:
-      - feature/fpe-anonymizer
+      - feature/fpe-analyzer-aws
 
 env:
   AWS_REGION: us-west-2

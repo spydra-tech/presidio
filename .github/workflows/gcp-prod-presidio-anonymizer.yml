@@ -47,5 +47,4 @@ jobs:
           gcloud run deploy "${CLOUD_RUN_SERVICE}" \
             --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --image="${IMAGE}" \
             --port=3000 --memory=2Gi --cpu=1 --timeout=300 --min-instances=0 --max-instances=10 \
-            --set-env-vars=PORT=3000,WORKERS=1 --allow-unauthenticated --quiet
-
+            --set-env-vars=WORKERS=1 --allow-unauthenticated --quiet
